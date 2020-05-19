@@ -10,13 +10,13 @@
    ========================================================================*/
 
 #include "fancyTimer.h"
-
+#include "logger.h"
+extern bool flag_block_output_of_initial_values;
 #include "problem.h"
 
 #if defined (USE_MPI)
 #include <mpi.h>
 #endif
-
 
 
 
@@ -1078,7 +1078,9 @@ void Problem::Euler_TimeDiscretize()
 	if(mrank == 0)
 	{
 #endif
-	OUTData(current_time,aktueller_zeitschritt,true);
+	aktuelle_zeit = current_time;
+	if(!flag_block_output_of_initial_values)
+		OUTData(current_time,aktueller_zeitschritt,true);
 #if defined(USE_MPI) || defined(USE_MPI_KRC) 
 	}
 #endif
@@ -1098,9 +1100,11 @@ void Problem::Euler_TimeDiscretize()
 	// ------------------------------------------
 	// PERFORM TRANSIENT SIMULATION
 	// ------------------------------------------
-	std::fstream fout("timer.txt", std::ofstream::out | std::ios::app);
-	FancyTimer<std::fstream> timer("Coupling loop: ", fout);
+	//std::fstream fout("timer.txt", std::ofstream::out | std::ios::app);
+	//FancyTimer<std::fstream> timer("Coupling loop: ", fout);
 	double previous_rejected_dt = .0;
+	logger.delete_file();
+
 	while(end_time > current_time)
 	{
 		// Get time step
@@ -1137,6 +1141,7 @@ void Problem::Euler_TimeDiscretize()
 		std::cout << "\n\n#############################################################\n";
 		std::cout << "Time step: " << aktueller_zeitschritt << "|  Time: " <<
 		current_time << "|  Time step size: " << dt << "\n";
+		logger.info<1>("Time step:", aktueller_zeitschritt, "- Time:", current_time, "- Step size", dt);
 		if(dt_rec > dt){
       double diff = dt_rec - dt;
       std::cout << "This time step size was modified by " << diff << " to match a critical time!" << "\n";
@@ -1371,6 +1376,7 @@ bool Problem::CouplingLoop()
   max_outer_error = 0.0;
   for (outer_index = 0; outer_index < cpl_overall_max_iterations; outer_index++)
   {
+	logger.info<1>("Coupling loop:", outer_index, "/", cpl_overall_max_iterations);
     // JT: All active processes must run on the overall loop. Strange this wasn't the case before.
     for (i = 0; i < num_processes; i++)
     {
@@ -1471,7 +1477,7 @@ bool Problem::CouplingLoop()
         //
         loop_process_number = i;
         if (a_pcs->first_coupling_iteration) PreCouplingLoop(a_pcs);
-        //				error = Call_Member_FN(this, active_processes[index])(); // TF: error set, but never used
+
         Call_Member_FN(this, active_processes[index])();
 
         for(int ii = 0; ii < a_pcs->pcs_number_of_primary_nvals; ii++)
@@ -1584,6 +1590,7 @@ bool Problem::CouplingLoop()
 
     	if(wdc_converged)
     	{
+    		//Logger(std::string("WDC converged"));
     		std::cout << "\tWDC converged\n";
     		for(int i=0; i<a_pcs->ogs_WDC_vector.size(); ++i)
     			std::cout << "\t\tTemperature at WDC " << i << " heat_exchanger: "
@@ -1596,22 +1603,7 @@ bool Problem::CouplingLoop()
   	if (((converged && outer_index + 1 >= cpl_overall_min_iterations)
   	&& wdc_converged)
     || outer_index+1 == cpl_overall_max_iterations)  // for FCT
-  	 // JT: error is relative to the tolerance.
-  	{
-        //auto now = std::time(nullptr);
-        //stream.imbue(std::locale)
-        std::ofstream stream("logging.txt", std::ios::app);
-        //stream << std::put_time(std::localtime(&now), "%c");
-        stream << aktuelle_zeit << '\t' << outer_index + 1;
-        for(auto& ogs_wdc: a_pcs->ogs_WDC_vector)
-        {
-        	stream << '\t' << ogs_wdc->get_extremum(a_pcs, 1, ogs_wdc->get_doublet_mesh_nodes().heatExchanger);
-        	//stream << '\t' << a_pcs->GetNodeValue(ogs_wdc.get_doublet_mesh_nodes().heatExchanger[0], 1);
-        	ogs_wdc->discard();  // !!! to recreate WDC in next time step
-        }
-        stream << '\n';
-		break;
-  	}
+  		break;
 
     //MW
     if (max_outer_error > 1 && outer_index + 1 == cpl_overall_max_iterations && cpl_overall_max_iterations > 1)	//m_tim->step_current>1 &&
@@ -1631,8 +1623,10 @@ bool Problem::CouplingLoop()
         PostMassTrasport();
       }
     }
-	
 	//
+    if(!accept)
+    	logger.warning("Not accepted");
+
 	return accept;
 }
 

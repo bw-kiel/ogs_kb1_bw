@@ -54,6 +54,7 @@ using namespace std;
 
 extern size_t max_dim;                            //OK411 todo
 
+
 #ifdef CHEMAPP
 #include "eqlink.h"
 #endif
@@ -123,6 +124,7 @@ bool OUTRead(const std::string& file_base_name,
 		return false;
 	out_file.seekg(0L, ios::beg);
 
+
 	// Keyword loop
 	cout << "OUTRead" << "\n";
 	while (!out_file.eof())
@@ -132,12 +134,6 @@ bool OUTRead(const std::string& file_base_name,
 		if (line_string.find("#STOP") != string::npos)
 			return true;
 
-		COutput* out(new COutput(out_vector.size()));
-
-#if defined(USE_PETSC) || defined(USE_MPI) //|| defined(other parallel libs)//03.3012. WW
-		out->setMPI_Info(rank, msize, rank_str);
-#endif
-		out->setFileBaseName(file_base_name);
 		// Give version in file name
 		//15.01.2008. WW
 		if (line_string.find("#VERSION") != string::npos)
@@ -146,6 +142,13 @@ bool OUTRead(const std::string& file_base_name,
 		// keyword found
 		if (line_string.find("#OUTPUT") != string::npos)
 		{
+			COutput* out(new COutput(out_vector.size()));
+
+#if defined(USE_PETSC) || defined(USE_MPI) //|| defined(other parallel libs)//03.3012. WW
+			out->setMPI_Info(rank, msize, rank_str);
+#endif
+			out->setFileBaseName(file_base_name);
+
 			position = out->Read(out_file, geo_obj, unique_name);
 
 			if(output_version) //// 02.2011. WW
@@ -298,6 +301,8 @@ void OUTData(double time_current, int time_step_number, bool force_output)
 					m_out->WriteWellDoubletControl(time_current, time_step_number); // 2018-06-27 JOD
 		else if (m_out->dat_type_name.compare("CONTRAFLOW") == 0)
 					m_out->WriteContraflow(time_current, time_step_number); // JOD 2019-08-23 JOD
+		else if (m_out->dat_type_name.compare("CONTRAFLOW_POLYLINE") == 0)
+					m_out->WriteContraflowPolyline(time_current, time_step_number); // JOD 2020-04-30 JOD
 		// ELE values, only called if ele values are defined for output, 05/2012 BG
 		if (m_out->getElementValueVector().size() > 0)
 			m_out->CalcELEFluxes();
